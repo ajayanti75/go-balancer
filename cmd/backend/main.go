@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 )
 
 // BackendServer represents our test backend server
@@ -14,13 +16,10 @@ type BackendServer struct {
 
 // ServeHTTP implements the http.Handler interface for our backend
 func (bs *BackendServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Log the incoming request
-	log.Printf("Received request from %s: %s %s",
-		r.RemoteAddr, r.Method, r.URL.Path)
+	log.Printf("Received request from %s: %s %s", r.RemoteAddr, r.Method, r.URL.Path)
 	log.Printf("Host: %s", r.Host)
 	log.Printf("User-Agent: %s", r.Header.Get("User-Agent"))
 
-	// Send response
 	response := fmt.Sprintf("Hello From Backend Server on port %d", bs.port)
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
@@ -29,25 +28,39 @@ func (bs *BackendServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Replied with a hello message")
 }
 
-// Simple backend server for testing the load balancer
 func main() {
-	port := flag.Int("port", 8080, "Port to listen on")
+	numServers := flag.Int("num", 3, "Number of backend servers to run")
+	portsStr := flag.String("ports", "8080,8081,8082", "Comma-separated list of ports to listen on")
 	flag.Parse()
 
-	// Create backend server instance
-	backend := &BackendServer{port: *port}
-
-	// Create HTTP server (consistent with our load balancer approach)
-	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", *port),
-		Handler: backend,
+	portStrings := strings.Split(*portsStr, ",")
+	if len(portStrings) != *numServers {
+		log.Fatalf("Number of ports (%d) must match number of servers (%d)", len(portStrings), *numServers)
 	}
 
-	log.Printf("Backend server starting on port %d", *port)
-
-	if err := server.ListenAndServe(); err != nil {
-		if err != http.ErrServerClosed {
-			log.Fatalf("Server failed to start: %v", err)
+	var ports []int
+	for _, ps := range portStrings {
+		p, err := strconv.Atoi(strings.TrimSpace(ps))
+		if err != nil {
+			log.Fatalf("Invalid port: %v", err)
 		}
+		ports = append(ports, p)
 	}
+
+	for i := 0; i < *numServers; i++ {
+		port := ports[i]
+		backend := &BackendServer{port: port}
+		server := &http.Server{
+			Addr:    fmt.Sprintf(":%d", port),
+			Handler: backend,
+		}
+		go func(s *http.Server, p int) {
+			log.Printf("Backend server starting on port %d", p)
+			if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Server on port %d failed: %v", p, err)
+			}
+		}(server, port)
+	}
+
+	select {} // Block forever
 }
