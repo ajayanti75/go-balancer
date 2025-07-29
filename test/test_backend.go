@@ -9,16 +9,21 @@ import (
 	"strings"
 )
 
-// BackendServer represents our test backend server
-type BackendServer struct {
+// TestBackendServer represents our test backend server for load balancer testing
+type TestBackendServer struct {
 	port int
 }
 
-// ServeHTTP implements the http.Handler interface for our backend
-func (bs *BackendServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+// ServeHTTP implements the http.Handler interface for our test backend
+func (bs *TestBackendServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received request from %s: %s %s", r.RemoteAddr, r.Method, r.URL.Path)
 	log.Printf("Host: %s", r.Host)
 	log.Printf("User-Agent: %s", r.Header.Get("User-Agent"))
+
+	// Log custom headers to demonstrate header forwarding capability
+	if testHeader := r.Header.Get("X-Test-Header"); testHeader != "" {
+		log.Printf("Custom header X-Test-Header: %s", testHeader)
+	}
 
 	response := fmt.Sprintf("Hello From Backend Server on port %d", bs.port)
 	w.Header().Set("Content-Type", "text/plain")
@@ -49,18 +54,18 @@ func main() {
 
 	for i := 0; i < *numServers; i++ {
 		port := ports[i]
-		backend := &BackendServer{port: port}
+		backend := &TestBackendServer{port: port}
 		server := &http.Server{
 			Addr:    fmt.Sprintf(":%d", port),
 			Handler: backend,
 		}
 		go func(s *http.Server, p int) {
-			log.Printf("Backend server starting on port %d", p)
+			log.Printf("Test backend server starting on port %d", p)
 			if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Fatalf("Server on port %d failed: %v", p, err)
+				log.Fatalf("Test server on port %d failed: %v", p, err)
 			}
 		}(server, port)
 	}
 
-	select {} // Block forever
+	select {} // Block forever to keep all servers running
 }

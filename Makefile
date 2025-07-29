@@ -18,46 +18,59 @@ help:
 build:
 	@echo "Building load balancer..."
 	go build -o bin/lb main.go
-	go build -o bin/backend cmd/backend/main.go
+	go build -o bin/test_backend test/test_backend.go
 
 # Check what's running on our ports
 check-ports:
-	@echo "Checking ports 8000 and 8080..."
-	@lsof -i :8000 -i :8080 || echo "Ports are free"
+	@echo "Checking ports 8000, 8080, 8081, 8082..."
+	@lsof -i :8000 -i :8080 -i :8081 -i :8082 || echo "Ports are free"
 
-# Kill any Go processes that might be running
+# Kill any processes that might be using our ports
 kill-processes:
-	@echo "Killing any running Go processes..."
-	@pkill -f "go run" || echo "No Go processes found"
+	@echo "Killing any running processes on our ports..."
+	@# Kill Go processes first
+	@pkill -f "go run" || echo "No go run processes found"
 	@pkill -f "bin/lb" || echo "No lb processes found"
 	@pkill -f "bin/backend" || echo "No backend processes found"
-	@sleep 1
+	@# Kill any process using our specific ports
+	@lsof -ti :8000 | xargs -r kill -9 || echo "Port 8000 is free"
+	@lsof -ti :8080 | xargs -r kill -9 || echo "Port 8080 is free"
+	@lsof -ti :8081 | xargs -r kill -9 || echo "Port 8081 is free"
+	@lsof -ti :8082 | xargs -r kill -9 || echo "Port 8082 is free"
+	@# Give processes time to clean up
+	@sleep 2
+	@echo "Port cleanup complete"
 
-# Run backend server
-run-backend: kill-processes
-	@echo "Starting backend server on port 8080..."
-	go run cmd/backend/main.go
+# Run backend servers (multiple)
+run-backends: kill-processes
+	@echo "Starting multiple test backend servers..."
+	go run test/test_backend.go -num=3 -ports="8080,8081,8082"
 
-# Run load balancer on port 8000
+# Run load balancer with multiple backends
 run-lb: kill-processes
-	@echo "Starting load balancer on port 8000..."
-	go run main.go -port=8000
+	@echo "Starting load balancer on port 8000 with multiple backends..."
+	go run main.go -port=8000 -backends="http://localhost:8080,http://localhost:8081,http://localhost:8082"
 
 # Run automated test
 test: kill-processes
 	@echo "Running automated test..."
-	@echo "Starting backend server..."
-	@go run cmd/backend/main.go &
-	@echo "Waiting for backend to start..."
-	@sleep 2
+	@echo "Starting multiple test backend servers..."
+	@go run test/test_backend.go -num=3 -ports="8080,8081,8082" &
+	@echo "Waiting for backends to start..."
+	@sleep 3
 	@echo "Starting load balancer..."
-	@go run main.go -port=8000 &
+	@go run main.go -port=8000 -backends="http://localhost:8080,http://localhost:8081,http://localhost:8082" &
 	@echo "Waiting for load balancer to start..."
-	@sleep 2
+	@sleep 4
 	@echo "Running tests..."
 	@./test.sh
 	@echo "Stopping processes..."
-	@pkill -f "go run" || echo "Processes already stopped"
+	@# Kill all processes on our ports to ensure clean shutdown
+	@lsof -ti :8000 | xargs -r kill -9 || echo "Port 8000 already free"
+	@lsof -ti :8080 | xargs -r kill -9 || echo "Port 8080 already free"
+	@lsof -ti :8081 | xargs -r kill -9 || echo "Port 8081 already free"
+	@lsof -ti :8082 | xargs -r kill -9 || echo "Port 8082 already free"
+	@pkill -f "go run" || echo "No go run processes found"
 
 # Run complete demo
 demo: test
