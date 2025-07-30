@@ -1,206 +1,96 @@
 # Go Load Balancer
 
-A production-ready HTTP load balancer implementation in Go, built following the [Coding Challenges Load Balancer Challenge](https://codingchallenges.fyi/challenges/challenge-load-balancer/).
+A production-ready HTTP load balancer implementation in Go with health checking, metrics collection, and pluggable load balancing strategies.
 
 ## Features
 
-- ✅ **Round-robin load balancing** across multiple backends
-- ✅ **Health checking** with automatic failure detection and recovery
-- ✅ **Concurrent request handling** using goroutines
-- ✅ **Thread-safe operations** with proper mutex usage
-- ✅ **Configurable timeouts** for health checks and backend requests
-- ✅ **Graceful error handling** and comprehensive logging
-- 🚧 **Docker containerization** (Step 4 - Final production deployment)
-
-## Project Structure
-
-```
-go-balancer/
-├── main.go                    # Entry point
-├── internal/                  # Core packages
-│   ├── config/               # Configuration management
-│   ├── pool/                 # Backend server pool management
-│   ├── balancer/             # Load balancing logic
-│   └── healthcheck/          # Health checking system
-├── test/test_backend.go      # Testing infrastructure
-├── test.sh                   # Automated test script
-└── Makefile                  # Build and test automation
-```
-
-## Implementation Status
-
-### ✅ Steps 1-3: Completed
-- **Basic HTTP forwarding** with detailed logging and concurrent handling
-- **Round-robin load balancing** with thread-safe atomic operations
-- **Health checking** with periodic monitoring and automatic failure recovery
-- **Modular architecture** with clean separation of concerns (config, pool, balancer, healthcheck)
-- **Configurable timeouts** for both health checks and backend requests
-- **Production-ready features**: Dynamic backend management, error handling, comprehensive logging
-
-### 🚧 Step 4: Docker Containerization & Integration Testing
-Next phase will include:
-- Multi-stage Dockerfile for optimized production builds
-- Docker Compose setup with load balancer + multiple backend services
-- Containerized integration test suite with automated testing
-- Production deployment documentation and best practices
+- **Round-robin load balancing** with atomic thread-safe operations
+- **Health checking** with automatic failure detection and recovery
+- **Prometheus metrics** endpoint for observability
+- **Strategy pattern** for pluggable load balancing algorithms
+- **Configuration validation** with comprehensive error checking
+- **Context-aware timeouts** for backend requests and health checks
+- **Graceful error handling** with structured logging
 
 ## Quick Start
 
-### Run with default settings:
 ```bash
-make test                    # Automated test with 3 backends
-```
+# Run all tests
+make test
 
-### Run manually:
-```bash
-# Start backends
-go run test/test_backend.go -num=3 -ports="8080,8081,8082"
+# Start backends manually
+make run-backends
 
-# Start load balancer  
-go run main.go
+# Start load balancer manually  
+make run-lb
 
 # Test requests
-curl http://localhost:8000/
+curl http://localhost:8000/          # Load balanced requests
+curl http://localhost:8000/metrics   # Prometheus metrics
+```
+
+## Architecture
+
+```
+internal/
+├── balancer/     # Core load balancing logic with strategy pattern
+├── config/       # Configuration management and validation
+├── pool/         # Backend server pool with health tracking
+├── healthcheck/  # Periodic health monitoring system
+├── strategy/     # Load balancing algorithms (round-robin, etc.)
+└── metrics/      # Prometheus metrics collection
 ```
 
 ## Configuration
 
-Customize behavior with command-line flags:
 ```bash
 go run main.go \
   -port=8000 \
-  -backends="http://localhost:8080,http://localhost:8081,http://localhost:8082" \
+  -backends="http://backend1:8080,http://backend2:8081" \
   -health-interval=10 \
   -health-timeout=2 \
-  -backend-timeout=30 \
-  -health-path="/"
+  -backend-timeout=30
 ```
 
-## Architecture Highlights
+## Metrics
 
-- **Health Checking**: Periodic monitoring with automatic failure detection and recovery
-- **Thread Safety**: RWMutex for backend pool, atomic counters for round-robin selection
-- **Context Timeouts**: Configurable timeouts for health checks (2s) and backend requests (30s)
-- **Error Handling**: Backends marked unhealthy on failures, graceful degradation
-- **Testing**: Comprehensive test suite including failure/recovery scenarios
+The load balancer exposes Prometheus-compatible metrics at `/metrics`:
+
+```
+go_balancer_requests_total 42
+go_balancer_requests_success_total 40
+go_balancer_backend_requests_total{backend="backend-1"} 14
+go_balancer_backend_healthy{state="healthy"} 3
+```
+
+## Key Design Patterns
+
+- **Strategy Pattern**: Pluggable load balancing algorithms
+- **Interface Segregation**: `LoadBalancingStrategy`, `MetricsProvider` interfaces
+- **Configuration Builder**: Validation with comprehensive error reporting
+- **Thread Safety**: `sync.RWMutex` for backend pool, atomic counters for round-robin
+- **Context Propagation**: Request timeouts and cancellation support
 
 ## Available Commands
 
 ```bash
-make help           # Show all commands
-make test           # Run full automated test suite  
-make kill-processes # Clean up all processes
-make check-ports    # Check port usage
+make help           # Show all available commands
+make test           # Run automated test suite
+make run-backends   # Start test backend servers
+make run-lb         # Start load balancer
+make kill-processes # Clean up all running processes
+make check-ports    # Check port usage status
 ```
 
-## Future Improvements
+## Production Readiness
 
-### Phase 1: Production Readiness
-**1. Interfaces & Testability**
-- Add interfaces for LoadBalancer, BackendPool, HealthChecker
-- Enable dependency injection and mocking for unit tests
-- Decouple components for better testability
+This implementation includes enterprise-grade features:
 
-**2. Structured Error Handling**
-```go
-type LoadBalancerError struct {
-    Op      string // Operation that failed
-    Backend string // Backend that caused error
-    Err     error  // Underlying error
-}
-```
+- **Health checking** with configurable intervals and timeouts
+- **Metrics collection** ready for Prometheus scraping
+- **Input validation** preventing invalid configurations
+- **Graceful degradation** when backends fail
+- **Comprehensive logging** for debugging and monitoring
+- **Clean shutdown** handling for production deployments
 
-**3. Configuration Validation**
-- Builder pattern for configuration with validation
-- Validate ports (1-65535), URLs, timeout relationships
-- Sensible defaults with override capabilities
-
-**4. Unit Testing**
-- Comprehensive test suite for individual components
-- Mock HTTP clients and dependencies
-- Test concurrent access patterns
-
-### Phase 2: Advanced Features
-**5. Load Balancing Strategies**
-```go
-type LoadBalancingStrategy interface {
-    NextBackend(pool BackendPool) *Backend
-    Name() string
-}
-```
-- Round Robin (current)
-- Weighted Round Robin
-- Least Connections
-- IP Hash (sticky sessions)
-- Random selection
-
-**6. Observability & Metrics**
-```go
-type Metrics struct {
-    TotalRequests     int64
-    SuccessfulRequests int64
-    BackendLatencies  map[string][]time.Duration
-    HealthCheckPasses map[string]int64
-    ResponseTimes     []time.Duration
-}
-```
-
-**7. Circuit Breaker Pattern**
-- Prevent cascading failures
-- Automatic recovery detection
-- Configurable failure thresholds
-
-### Phase 3: Enterprise Features
-**8. Request Tracing**
-- Distributed tracing with correlation IDs
-- Request lifecycle tracking
-- Performance bottleneck identification
-
-**9. Rate Limiting**
-- Per-client request limiting
-- Backend protection from overload
-- Configurable limits and windows
-
-**10. Admin API**
-```go
-GET  /admin/health      # Overall system health
-GET  /admin/backends    # Backend status
-POST /admin/backends    # Add backend
-PUT  /admin/config      # Runtime configuration
-```
-
-**11. Connection Pooling**
-- Reuse HTTP connections to backends
-- Configurable pool sizes
-- Connection lifecycle management
-
-This load balancer demonstrates production-ready Go concurrency patterns, proper error handling, and enterprise-grade health checking capabilities.
-
-## Expected Output
-
-When running tests, you should see perfect round-robin distribution:
-- Load balancer logs showing the incoming request details
-- Backend server logs showing the forwarded request
-- Response from the backend server returned to the client
-
-```
-# Load balancer logs:
-2025/07/29 10:29:57 Load balancer starting on port 8000
-2025/07/29 10:29:57 Forwarding requests to backends: [http://localhost:8080 http://localhost:8081 http://localhost:8082]
-2025/07/29 10:29:58 Received GET request on / from [::1]:50292
-2025/07/29 10:29:58 Forwarding to backend: backend-1 (http://localhost:8080)
-2025/07/29 10:29:58 Response from backend backend-1: 200 OK
-
-# Test backend logs:
-2025/07/29 10:29:54 Test backend server starting on port 8080
-2025/07/29 10:29:58 Received request from [::1]:50293: GET /
-2025/07/29 10:29:58 Replied with a hello message
-
-# Client responses show perfect round-robin:
-Request 1: Hello From Backend Server on port 8080
-Request 2: Hello From Backend Server on port 8081  
-Request 3: Hello From Backend Server on port 8082
-Request 4: Hello From Backend Server on port 8080  # Back to first
-Request 5: Hello From Backend Server on port 8081  # Second
-Request 6: Hello From Backend Server on port 8082  # Third
-```
+Built following production Go patterns with proper error handling, concurrent safety, and observability.

@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"net/http"
 	"sync"
 	"time"
 )
@@ -10,21 +11,21 @@ type Metrics struct {
 	mu sync.RWMutex
 
 	// Request metrics
-	totalRequests     int64
+	totalRequests      int64
 	successfulRequests int64
-	failedRequests    int64
-	
+	failedRequests     int64
+
 	// Backend metrics
-	backendRequests   map[string]int64
-	backendFailures   map[string]int64
-	
+	backendRequests map[string]int64
+	backendFailures map[string]int64
+
 	// Health check metrics
 	healthCheckPasses map[string]int64
 	healthCheckFails  map[string]int64
-	
+
 	// Current state
-	healthyBackends   int
-	totalBackends     int
+	healthyBackends int
+	totalBackends   int
 }
 
 // NewMetrics creates a new metrics instance
@@ -41,17 +42,15 @@ func NewMetrics() *Metrics {
 func (m *Metrics) RecordRequest(backend string, duration time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	m.totalRequests++
 	m.successfulRequests++
 	m.backendRequests[backend]++
-}
-
-// RecordFailure records a failed request
+} // RecordFailure records a failed request
 func (m *Metrics) RecordFailure(backend string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	m.totalRequests++
 	m.failedRequests++
 	m.backendFailures[backend]++
@@ -61,7 +60,7 @@ func (m *Metrics) RecordFailure(backend string) {
 func (m *Metrics) RecordHealthCheck(backend string, success bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	if success {
 		m.healthCheckPasses[backend]++
 	} else {
@@ -73,7 +72,7 @@ func (m *Metrics) RecordHealthCheck(backend string, success bool) {
 func (m *Metrics) UpdateBackendCount(healthy, total int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	m.healthyBackends = healthy
 	m.totalBackends = total
 }
@@ -82,7 +81,7 @@ func (m *Metrics) UpdateBackendCount(healthy, total int) {
 func (m *Metrics) GetSnapshot() MetricsSnapshot {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	return MetricsSnapshot{
 		TotalRequests:      m.totalRequests,
 		SuccessfulRequests: m.successfulRequests,
@@ -117,4 +116,10 @@ func (ms *MetricsSnapshot) HealthyPercentage() float64 {
 		return 0.0
 	}
 	return (float64(ms.HealthyBackends) / float64(ms.TotalBackends)) * 100.0
+}
+
+// MetricsProvider is an interface for exposing metrics
+// (e.g., Prometheus, JSON, etc.)
+type MetricsProvider interface {
+	ServeHTTP(w http.ResponseWriter, r *http.Request)
 }

@@ -51,10 +51,22 @@ func main() {
 		log.Fatalf("Failed to create load balancer: %v", err)
 	}
 
-	// Create HTTP server for the load balancer
+	// Create HTTP server with both load balancer and metrics
+	mux := http.NewServeMux()
+
+	// Handle metrics endpoint
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		lb.GetMetricsProvider().ServeHTTP(w, r)
+	})
+
+	// Handle all other requests with the load balancer
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		lb.ServeHTTP(w, r)
+	})
+
 	loadBalancerServer := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
-		Handler: lb,
+		Handler: mux,
 	}
 
 	log.Printf("Load balancer starting on port %d", cfg.Port)

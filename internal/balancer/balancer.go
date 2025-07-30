@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	"go-balancer/internal/config"
 	"go-balancer/internal/healthcheck"
@@ -22,6 +23,8 @@ type LoadBalancer struct {
 	strategy      strategy.LoadBalancingStrategy
 	healthChecker *healthcheck.HealthChecker
 	metrics       *metrics.Metrics
+
+	metricsProvider metrics.MetricsProvider
 }
 
 // NewLoadBalancer creates a new LoadBalancer instance
@@ -46,13 +49,15 @@ func NewLoadBalancer(cfg *config.Config) (*LoadBalancer, error) {
 	// Start health checks
 	healthChecker.Start()
 
+	m := metrics.NewMetrics()
 	return &LoadBalancer{
-		config:        cfg,
-		client:        &http.Client{},
-		serverPool:    serverPool,
-		strategy:      strategy.NewRoundRobinStrategy(),
-		healthChecker: healthChecker,
-		metrics:       metrics.NewMetrics(),
+		config:          cfg,
+		client:          &http.Client{},
+		serverPool:      serverPool,
+		strategy:        strategy.NewRoundRobinStrategy(),
+		healthChecker:   healthChecker,
+		metrics:         m,
+		metricsProvider: metrics.NewPrometheusMetricsProvider(m),
 	}, nil
 }
 
@@ -96,9 +101,15 @@ func (lb *LoadBalancer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	backendReq.URL.RawQuery = r.URL.RawQuery
 
 	// Make the request to the backend server
+	start := time.Now()
 	resp, err := lb.client.Do(backendReq)
+	duration := time.Since(start)
+
 	if err != nil {
 		log.Printf("Error forwarding request to backend %s: %v", backend.ID, err)
+
+		// Record failure in metrics
+		lb.metrics.RecordFailure(backend.ID)
 
 		// Mark backend as unhealthy for future requests
 		lb.serverPool.SetBackendHealth(backend.ID, false)
@@ -107,6 +118,9 @@ func (lb *LoadBalancer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
+
+	// Record successful request in metrics
+	lb.metrics.RecordRequest(backend.ID, duration)
 
 	// Log the response from backend
 	log.Printf("Response from backend %s: %s", backend.ID, resp.Status)
@@ -148,4 +162,9 @@ func (lb *LoadBalancer) Stop() {
 	if lb.healthChecker != nil {
 		lb.healthChecker.Stop()
 	}
+}
+
+// GetMetricsProvider returns the metrics provider
+func (lb *LoadBalancer) GetMetricsProvider() metrics.MetricsProvider {
+	return lb.metricsProvider
 }

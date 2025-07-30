@@ -32,11 +32,11 @@ kill-processes:
 	@pkill -f "go run" || echo "No go run processes found"
 	@pkill -f "bin/lb" || echo "No lb processes found"
 	@pkill -f "bin/backend" || echo "No backend processes found"
-	@# Kill any process using our specific ports
-	@lsof -ti :8000 | xargs -r kill -9 || echo "Port 8000 is free"
-	@lsof -ti :8080 | xargs -r kill -9 || echo "Port 8080 is free"
-	@lsof -ti :8081 | xargs -r kill -9 || echo "Port 8081 is free"
-	@lsof -ti :8082 | xargs -r kill -9 || echo "Port 8082 is free"
+	@# Kill any process using our specific ports (macOS compatible)
+	@lsof -ti :8000 | while read pid; do kill -9 $$pid 2>/dev/null || true; done || echo "Port 8000 is free"
+	@lsof -ti :8080 | while read pid; do kill -9 $$pid 2>/dev/null || true; done || echo "Port 8080 is free"
+	@lsof -ti :8081 | while read pid; do kill -9 $$pid 2>/dev/null || true; done || echo "Port 8081 is free"
+	@lsof -ti :8082 | while read pid; do kill -9 $$pid 2>/dev/null || true; done || echo "Port 8082 is free"
 	@# Give processes time to clean up
 	@sleep 2
 	@echo "Port cleanup complete"
