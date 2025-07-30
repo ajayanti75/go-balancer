@@ -9,6 +9,7 @@ import (
 
 	"go-balancer/internal/config"
 	"go-balancer/internal/healthcheck"
+	"go-balancer/internal/metrics"
 	"go-balancer/internal/pool"
 	"go-balancer/internal/strategy"
 )
@@ -20,6 +21,7 @@ type LoadBalancer struct {
 	serverPool    *pool.ServerPool
 	strategy      strategy.LoadBalancingStrategy
 	healthChecker *healthcheck.HealthChecker
+	metrics       *metrics.Metrics
 }
 
 // NewLoadBalancer creates a new LoadBalancer instance
@@ -50,6 +52,7 @@ func NewLoadBalancer(cfg *config.Config) (*LoadBalancer, error) {
 		serverPool:    serverPool,
 		strategy:      strategy.NewRoundRobinStrategy(),
 		healthChecker: healthChecker,
+		metrics:       metrics.NewMetrics(),
 	}, nil
 }
 

@@ -40,6 +40,11 @@ func main() {
 		BackendTimeout:      time.Duration(*backendTimeout) * time.Second,
 	}
 
+	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("Configuration validation failed: %v", err)
+	}
+
 	// Create load balancer
 	lb, err := balancer.NewLoadBalancer(cfg)
 	if err != nil {
