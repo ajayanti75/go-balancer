@@ -21,8 +21,23 @@ func ValidateConfig(c *Config) error {
 
 	// Validate each backend URL
 	for i, backend := range c.Backends {
-		if _, err := url.Parse(backend); err != nil {
+		if backend == "" {
+			errors = append(errors, fmt.Sprintf("backend[%d] cannot be empty", i))
+			continue
+		}
+
+		parsedURL, err := url.Parse(backend)
+		if err != nil {
 			errors = append(errors, fmt.Sprintf("backend[%d] '%s' is not a valid URL: %v", i, backend, err))
+			continue
+		}
+
+		if parsedURL.Scheme == "" {
+			errors = append(errors, fmt.Sprintf("backend[%d] '%s' must include a scheme (http:// or https://)", i, backend))
+		}
+
+		if parsedURL.Host == "" {
+			errors = append(errors, fmt.Sprintf("backend[%d] '%s' must include a host", i, backend))
 		}
 	}
 
@@ -43,7 +58,7 @@ func ValidateConfig(c *Config) error {
 
 	// Validate timeout relationship
 	if c.HealthCheckTimeout >= c.HealthCheckInterval {
-		errors = append(errors, fmt.Sprintf("health check timeout (%s) must be less than interval (%s)", 
+		errors = append(errors, fmt.Sprintf("health check timeout (%s) must be less than interval (%s)",
 			c.HealthCheckTimeout, c.HealthCheckInterval))
 	}
 
@@ -53,7 +68,7 @@ func ValidateConfig(c *Config) error {
 	}
 
 	if len(errors) > 0 {
-		return fmt.Errorf("configuration validation failed:\n  - %s", 
+		return fmt.Errorf("configuration validation failed:\n  - %s",
 			fmt.Sprintf("%s", errors[0]))
 	}
 
