@@ -94,3 +94,26 @@ This implementation includes enterprise-grade features:
 - **Clean shutdown** handling for production deployments
 
 Built following production Go patterns with proper error handling, concurrent safety, and observability.
+
+## Future Improvements
+
+### Production Environment & Containerization
+**Goal**: Create a complete production-like environment using Docker
+
+**Planned Infrastructure**:
+- **Multi-stage Dockerfile** with optimized production builds and security scanning
+- **Docker Compose** orchestrating the complete stack with service discovery
+- **Prometheus** for metrics collection and alerting rules
+- **Thanos** for long-term metrics storage and global query capabilities  
+- **Grafana** with custom dashboards for load balancer and infrastructure metrics
+- **Mock client services** generating realistic traffic patterns and load testing
+- **Service mesh integration** (Envoy/Istio) for advanced traffic management
+- **Distributed tracing** with Jaeger for request flow visualization
+
+**Advanced Features**:
+- **Circuit breaker pattern** with configurable failure thresholds
+- **Rate limiting** with token bucket and sliding window algorithms
+- **Weighted load balancing** with dynamic backend weighting
+- **Health check diversity** (HTTP, TCP, gRPC, custom scripts)
+- **Configuration hot-reloading** without service interruption
+- **Admin API** for runtime backend management and configuration updates
