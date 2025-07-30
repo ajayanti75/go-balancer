@@ -111,7 +111,6 @@ Built following production Go patterns with proper error handling, concurrent sa
 - **Distributed tracing** with Jaeger for request flow visualization
 
 **Advanced Features**:
-- **Circuit breaker pattern** with configurable failure thresholds
 - **Rate limiting** with token bucket and sliding window algorithms
 - **Weighted load balancing** with dynamic backend weighting
 - **Health check diversity** (HTTP, TCP, gRPC, custom scripts)
