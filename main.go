@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"go-balancer/internal/balancer"
 	"go-balancer/internal/config"
@@ -14,8 +15,12 @@ import (
 func main() {
 	// Parse command line flags
 	var (
-		port     = flag.Int("port", 8000, "Port to listen on")
-		backends = flag.String("backends", "http://localhost:8080,http://localhost:8081,http://localhost:8082", "Comma-separated list of backend servers")
+		port           = flag.Int("port", 8000, "Port to listen on")
+		backends       = flag.String("backends", "http://localhost:8080,http://localhost:8081,http://localhost:8082", "Comma-separated list of backend servers")
+		healthPath     = flag.String("health-path", "/", "Path to use for health checking")
+		healthInterval = flag.Int("health-interval", 10, "Health check interval in seconds")
+		healthTimeout  = flag.Int("health-timeout", 2, "Health check timeout in seconds")
+		backendTimeout = flag.Int("backend-timeout", 30, "Timeout for backend requests in seconds")
 	)
 	flag.Parse()
 
@@ -27,8 +32,12 @@ func main() {
 
 	// Create config
 	cfg := &config.Config{
-		Port:     *port,
-		Backends: backendList,
+		Port:                *port,
+		Backends:            backendList,
+		HealthCheckPath:     *healthPath,
+		HealthCheckInterval: time.Duration(*healthInterval) * time.Second,
+		HealthCheckTimeout:  time.Duration(*healthTimeout) * time.Second,
+		BackendTimeout:      time.Duration(*backendTimeout) * time.Second,
 	}
 
 	// Create load balancer
@@ -45,6 +54,9 @@ func main() {
 
 	log.Printf("Load balancer starting on port %d", cfg.Port)
 	log.Printf("Forwarding requests to backends: %v", cfg.Backends)
+	log.Printf("Health checks: every %s, timeout %s, path %s",
+		cfg.HealthCheckInterval, cfg.HealthCheckTimeout, cfg.HealthCheckPath)
+	log.Printf("Backend request timeout: %s", cfg.BackendTimeout)
 
 	// Start the load balancer server
 	if err := loadBalancerServer.ListenAndServe(); err != nil {

@@ -56,21 +56,16 @@ test: kill-processes
 	@echo "Running automated test..."
 	@echo "Starting multiple test backend servers..."
 	@go run test/test_backend.go -num=3 -ports="8080,8081,8082" &
-	@echo "Waiting for backends to start..."
 	@sleep 3
 	@echo "Starting load balancer..."
-	@go run main.go -port=8000 -backends="http://localhost:8080,http://localhost:8081,http://localhost:8082" &
-	@echo "Waiting for load balancer to start..."
-	@sleep 4
+	@go run main.go -port=8000 -backends="http://localhost:8080,http://localhost:8081,http://localhost:8082" > /tmp/lb.log 2>&1 &
+	@sleep 5
 	@echo "Running tests..."
 	@./test.sh
-	@echo "Stopping processes..."
-	@# Kill all processes on our ports to ensure clean shutdown
-	@lsof -ti :8000 | xargs -r kill -9 || echo "Port 8000 already free"
-	@lsof -ti :8080 | xargs -r kill -9 || echo "Port 8080 already free"
-	@lsof -ti :8081 | xargs -r kill -9 || echo "Port 8081 already free"
-	@lsof -ti :8082 | xargs -r kill -9 || echo "Port 8082 already free"
-	@pkill -f "go run" || echo "No go run processes found"
+	@echo "Load balancer logs:"
+	@cat /tmp/lb.log
+	@echo "Test completed. Cleaning up..."
+	@$(MAKE) kill-processes
 
 # Run complete demo
 demo: test

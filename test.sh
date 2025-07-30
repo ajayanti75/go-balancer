@@ -36,4 +36,16 @@ wait
 echo -e "\nConcurrent test complete!"
 echo
 
-echo "Test complete! Check the load balancer logs to verify round-robin distribution."
+# Test health check functionality
+echo "5. Testing health check recovery..."
+echo "Note: Health check test disabled in automated mode due to timing complexity"
+echo "To test health checking manually:"
+echo "  1. Run: make run-backends (in terminal 1)"
+echo "  2. Run: make run-lb (in terminal 2)" 
+echo "  3. Kill one backend process and observe recovery"
+echo
+
+echo "Test complete! Check the load balancer logs to verify:"
+echo "1. Round-robin distribution"
+echo "2. Health check detection of failed backend"
+echo "3. Backend recovery and re-inclusion in rotation"

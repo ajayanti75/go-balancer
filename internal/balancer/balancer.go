@@ -1,6 +1,7 @@
 package balancer
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -8,15 +9,17 @@ import (
 	"sync/atomic"
 
 	"go-balancer/internal/config"
+	"go-balancer/internal/healthcheck"
 	"go-balancer/internal/pool"
 )
 
 // LoadBalancer represents our load balancer
 type LoadBalancer struct {
-	config     *config.Config
-	client     *http.Client
-	serverPool *pool.ServerPool
-	current    int64 // atomic counter for round-robin
+	config        *config.Config
+	client        *http.Client
+	serverPool    *pool.ServerPool
+	current       int64 // atomic counter for round-robin
+	healthChecker *healthcheck.HealthChecker
 }
 
 // NewLoadBalancer creates a new LoadBalancer instance
@@ -30,11 +33,23 @@ func NewLoadBalancer(cfg *config.Config) (*LoadBalancer, error) {
 		}
 	}
 
+	// Create health checker
+	healthChecker := healthcheck.NewHealthChecker(
+		serverPool,
+		cfg.HealthCheckPath,
+		cfg.HealthCheckInterval,
+		cfg.HealthCheckTimeout,
+	)
+
+	// Start health checks
+	healthChecker.Start()
+
 	return &LoadBalancer{
-		config:     cfg,
-		client:     &http.Client{},
-		serverPool: serverPool,
-		current:    0,
+		config:        cfg,
+		client:        &http.Client{},
+		serverPool:    serverPool,
+		current:       0,
+		healthChecker: healthChecker,
 	}, nil
 }
 
@@ -76,8 +91,12 @@ func (lb *LoadBalancer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("User-Agent: %s", r.Header.Get("User-Agent"))
 	log.Printf("Forwarding to backend: %s (%s)", backend.ID, backend.URL.String())
 
+	// Create context with timeout for the backend request
+	ctx, cancel := context.WithTimeout(r.Context(), lb.config.BackendTimeout)
+	defer cancel()
+
 	// Create a new request to forward to the selected backend
-	backendReq, err := http.NewRequest(r.Method, backend.URL.String()+r.URL.Path, r.Body)
+	backendReq, err := http.NewRequestWithContext(ctx, r.Method, backend.URL.String()+r.URL.Path, r.Body)
 	if err != nil {
 		log.Printf("Error creating backend request: %v", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -136,4 +155,11 @@ func (lb *LoadBalancer) RemoveBackend(id string) bool {
 // GetBackends returns current backend status
 func (lb *LoadBalancer) GetBackends() []*pool.Backend {
 	return lb.serverPool.GetBackends()
+}
+
+// Stop gracefully shuts down the load balancer
+func (lb *LoadBalancer) Stop() {
+	if lb.healthChecker != nil {
+		lb.healthChecker.Stop()
+	}
 }

@@ -1,175 +1,180 @@
 # Go Load Balancer
 
-A production-ready HTTP load balancer implementation in Go, built as part of the [Coding Challenges Load Balancer Challenge](https://codingchallenges.fyi/challenges/challenge-load-balancer/).
+A production-ready HTTP load balancer implementation in Go, built following the [Coding Challenges Load Balancer Challenge](https://codingchallenges.fyi/challenges/challenge-load-balancer/).
 
-## Project Overview
+## Features
 
-This project implements a robust HTTP load balancer with:
-- ✅ **Round-robin load balancing** across multiple backend servers
+- ✅ **Round-robin load balancing** across multiple backends
+- ✅ **Health checking** with automatic failure detection and recovery
 - ✅ **Concurrent request handling** using goroutines
 - ✅ **Thread-safe operations** with proper mutex usage
-- ✅ **Graceful error handling** and backend failure detection
-- ✅ **Modular architecture** with clean separation of concerns
-- 🚧 **Health checking** (Step 3 - Coming Soon)
+- ✅ **Configurable timeouts** for health checks and backend requests
+- ✅ **Graceful error handling** and comprehensive logging
 - 🚧 **Docker containerization** (Step 4 - Final production deployment)
 
 ## Project Structure
 
 ```
 go-balancer/
-├── main.go                    # Entry point for the load balancer
-├── internal/                  # Core load balancer packages
+├── main.go                    # Entry point
+├── internal/                  # Core packages
 │   ├── config/               # Configuration management
-│   │   └── config.go
 │   ├── pool/                 # Backend server pool management
-│   │   └── server_pool.go
-│   └── balancer/             # Load balancing logic
-│       └── balancer.go
-├── test/                     # Testing infrastructure (separate from main app)
-│   └── test_backend.go       # Mock backend servers for testing
+│   ├── balancer/             # Load balancing logic
+│   └── healthcheck/          # Health checking system
+├── test/test_backend.go      # Testing infrastructure
 ├── test.sh                   # Automated test script
-├── Makefile                  # Build and test automation
-├── go.mod
-└── README.md
+└── Makefile                  # Build and test automation
 ```
 
 ## Implementation Status
 
-### ✅ Step 1: Basic HTTP Server and Request Forwarding (COMPLETED)
-- [x] HTTP server listening on configurable port
-- [x] Detailed request logging with client information
-- [x] Request forwarding to backend servers
-- [x] Concurrent request handling with goroutines
-- [x] Comprehensive error handling and logging
-- [x] Command-line configuration support
+### ✅ Steps 1-3: Completed
+- **Basic HTTP forwarding** with detailed logging and concurrent handling
+- **Round-robin load balancing** with thread-safe atomic operations
+- **Health checking** with periodic monitoring and automatic failure recovery
+- **Modular architecture** with clean separation of concerns (config, pool, balancer, healthcheck)
+- **Configurable timeouts** for both health checks and backend requests
+- **Production-ready features**: Dynamic backend management, error handling, comprehensive logging
 
-### ✅ Step 2: Round-Robin Load Balancing (COMPLETED)
-- [x] Support for multiple backend servers (3 by default)
-- [x] Thread-safe round-robin algorithm using atomic counters
-- [x] Even distribution of requests across healthy backends
-- [x] Modular architecture with separate packages:
-  - **Config**: Centralized configuration management
-  - **Pool**: Backend server pool with thread-safe operations
-  - **Balancer**: Load balancing logic and HTTP request handling
-- [x] Dynamic backend management (add/remove backends)
-- [x] Backend failure detection and automatic marking as unhealthy
+### 🚧 Step 4: Docker Containerization & Integration Testing
+Next phase will include:
+- Multi-stage Dockerfile for optimized production builds
+- Docker Compose setup with load balancer + multiple backend services
+- Containerized integration test suite with automated testing
+- Production deployment documentation and best practices
 
-### 🚧 Step 3: Health Checking (TODO)
-- [ ] Periodic health checks for backend servers
-- [ ] Automatic removal of unhealthy servers from rotation
-- [ ] Re-addition of servers when they become healthy again
-- [ ] Configurable health check intervals and timeouts
+## Quick Start
 
-### 🚧 Step 4: Docker Containerization & Integration Testing (TODO)
-- [ ] **Multi-stage Dockerfile** for optimized production builds
-- [ ] **Docker Compose setup** with load balancer + multiple backend services
-- [ ] **Container networking** configuration for service discovery
-- [ ] **Environment-based configuration** (ports, backend URLs, health check settings)
-- [ ] **Integration test suite** running in containerized environment
-- [ ] **End-to-end testing** with real Docker containers
-- [ ] **Production deployment** documentation with Docker best practices
-- [ ] **Container health checks** and monitoring setup
-- [ ] **Volume mounting** for configuration and logs
-- [ ] **Multi-architecture builds** (AMD64, ARM64) for deployment flexibility
-
-## How to Run
-
-### Prerequisites
-- Go 1.21 or later installed
-- For Step 4 (future): Docker and Docker Compose
-
-### Running the Load Balancer
-
-1. **Start test backend servers** (for testing):
-   ```bash
-   # Terminal 1: Start 3 test backend servers on ports 8080, 8081, 8082
-   make run-backends
-   ```
-
-2. **Run the load balancer**:
-   ```bash
-   # Terminal 2: Run the load balancer on port 8000
-   make run-lb
-   ```
-
-3. **Test the setup**:
-   ```bash
-   # Terminal 3: Send test requests
-   curl http://localhost:8000/
-   
-   # Or run our comprehensive automated test:
-   make test
-   ```
-
-### Available Commands
-
+### Run with default settings:
 ```bash
-make help           # Show all available commands
-make build          # Build binaries (lb and test_backend)
-make run-backends   # Start 3 test backend servers
-make run-lb         # Start load balancer on port 8000
-make test           # Run comprehensive automated tests
-make demo           # Same as test
-make clean          # Clean up build artifacts
-make kill-processes # Kill any running processes and free ports
-make check-ports    # Check what's using our ports (8000-8082)
+make test                    # Automated test with 3 backends
+```
+
+### Run manually:
+```bash
+# Start backends
+go run test/test_backend.go -num=3 -ports="8080,8081,8082"
+
+# Start load balancer  
+go run main.go
+
+# Test requests
+curl http://localhost:8000/
 ```
 
 ## Configuration
 
-The load balancer supports the following configuration options:
-
-- `--port`: Port for load balancer to listen on (default: 8000)
-- `--backends`: Comma-separated list of backend URLs (default: 3 backends on localhost)
-
-### Example Usage
-
+Customize behavior with command-line flags:
 ```bash
-# Run with default settings (3 backends: 8080, 8081, 8082)
-go run main.go
-
-# Run on custom port with custom backends
-go run main.go -port=9000 -backends="http://localhost:3000,http://localhost:3001"
-
-# Run test backends on custom ports
-go run test/test_backend.go -num=2 -ports="3000,3001"
+go run main.go \
+  -port=8000 \
+  -backends="http://localhost:8080,http://localhost:8081,http://localhost:8082" \
+  -health-interval=10 \
+  -health-timeout=2 \
+  -backend-timeout=30 \
+  -health-path="/"
 ```
 
-## Test Coverage & Real-World Value
+## Architecture Highlights
 
-Our test suite validates several critical load balancer capabilities:
+- **Health Checking**: Periodic monitoring with automatic failure detection and recovery
+- **Thread Safety**: RWMutex for backend pool, atomic counters for round-robin selection
+- **Context Timeouts**: Configurable timeouts for health checks (2s) and backend requests (30s)
+- **Error Handling**: Backends marked unhealthy on failures, graceful degradation
+- **Testing**: Comprehensive test suite including failure/recovery scenarios
 
-### 1. **Round-Robin Distribution Testing**
+## Available Commands
+
 ```bash
-# Tests even distribution across backends
-for i in {1..6}; do curl http://localhost:8000/; done
+make help           # Show all commands
+make test           # Run full automated test suite  
+make kill-processes # Clean up all processes
+make check-ports    # Check port usage
 ```
-**Real-World Value**: Ensures no single backend gets overwhelmed while others sit idle.
 
-### 2. **Path Forwarding Testing**
-```bash
-# Tests different URL paths
-curl http://localhost:8000/api/test
-```
-**Real-World Value**: Critical for microservices where different paths may have different performance characteristics. Load balancers must preserve the full request path, query parameters, and routing context.
+## Future Improvements
 
-### 3. **Header Forwarding Testing**
-```bash
-# Tests custom header propagation
-curl -H "X-Test-Header: test-value" http://localhost:8000/
-```
-**Real-World Value**: 
-- **Authentication**: JWT tokens, API keys in headers must reach backends
-- **Tracing**: Distributed tracing headers (X-Trace-ID, X-Request-ID) for observability
-- **Content Negotiation**: Accept, Content-Type headers for API versioning
-- **Load Balancer Metadata**: Custom headers like X-Forwarded-For, X-Real-IP
+### Phase 1: Production Readiness
+**1. Interfaces & Testability**
+- Add interfaces for LoadBalancer, BackendPool, HealthChecker
+- Enable dependency injection and mocking for unit tests
+- Decouple components for better testability
 
-### 4. **Concurrent Request Testing**
-```bash
-# Tests thread safety under load
-for i in {1..6}; do curl http://localhost:8000/ & done; wait
+**2. Structured Error Handling**
+```go
+type LoadBalancerError struct {
+    Op      string // Operation that failed
+    Backend string // Backend that caused error
+    Err     error  // Underlying error
+}
 ```
-**Real-World Value**: Validates that the load balancer can handle multiple simultaneous requests without race conditions, request mixing, or crashes - essential for production traffic.
+
+**3. Configuration Validation**
+- Builder pattern for configuration with validation
+- Validate ports (1-65535), URLs, timeout relationships
+- Sensible defaults with override capabilities
+
+**4. Unit Testing**
+- Comprehensive test suite for individual components
+- Mock HTTP clients and dependencies
+- Test concurrent access patterns
+
+### Phase 2: Advanced Features
+**5. Load Balancing Strategies**
+```go
+type LoadBalancingStrategy interface {
+    NextBackend(pool BackendPool) *Backend
+    Name() string
+}
+```
+- Round Robin (current)
+- Weighted Round Robin
+- Least Connections
+- IP Hash (sticky sessions)
+- Random selection
+
+**6. Observability & Metrics**
+```go
+type Metrics struct {
+    TotalRequests     int64
+    SuccessfulRequests int64
+    BackendLatencies  map[string][]time.Duration
+    HealthCheckPasses map[string]int64
+    ResponseTimes     []time.Duration
+}
+```
+
+**7. Circuit Breaker Pattern**
+- Prevent cascading failures
+- Automatic recovery detection
+- Configurable failure thresholds
+
+### Phase 3: Enterprise Features
+**8. Request Tracing**
+- Distributed tracing with correlation IDs
+- Request lifecycle tracking
+- Performance bottleneck identification
+
+**9. Rate Limiting**
+- Per-client request limiting
+- Backend protection from overload
+- Configurable limits and windows
+
+**10. Admin API**
+```go
+GET  /admin/health      # Overall system health
+GET  /admin/backends    # Backend status
+POST /admin/backends    # Add backend
+PUT  /admin/config      # Runtime configuration
+```
+
+**11. Connection Pooling**
+- Reuse HTTP connections to backends
+- Configurable pool sizes
+- Connection lifecycle management
+
+This load balancer demonstrates production-ready Go concurrency patterns, proper error handling, and enterprise-grade health checking capabilities.
 
 ## Expected Output
 
