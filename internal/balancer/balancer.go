@@ -6,11 +6,11 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"sync/atomic"
 
 	"go-balancer/internal/config"
 	"go-balancer/internal/healthcheck"
 	"go-balancer/internal/pool"
+	"go-balancer/internal/strategy"
 )
 
 // LoadBalancer represents our load balancer
@@ -18,7 +18,7 @@ type LoadBalancer struct {
 	config        *config.Config
 	client        *http.Client
 	serverPool    *pool.ServerPool
-	current       int64 // atomic counter for round-robin
+	strategy      strategy.LoadBalancingStrategy
 	healthChecker *healthcheck.HealthChecker
 }
 
@@ -48,31 +48,14 @@ func NewLoadBalancer(cfg *config.Config) (*LoadBalancer, error) {
 		config:        cfg,
 		client:        &http.Client{},
 		serverPool:    serverPool,
-		current:       0,
+		strategy:      strategy.NewRoundRobinStrategy(),
 		healthChecker: healthChecker,
 	}, nil
 }
 
-// getNextHealthyBackend implements round-robin among healthy backends
+// getNextHealthyBackend uses the configured strategy to get next backend
 func (lb *LoadBalancer) getNextHealthyBackend() *pool.Backend {
-	backendCount := lb.serverPool.GetBackendCount()
-	if backendCount == 0 {
-		return nil
-	}
-
-	// Try each backend in round-robin fashion
-	for i := 0; i < backendCount; i++ {
-		next := atomic.AddInt64(&lb.current, 1)
-		index := int((next - 1) % int64(backendCount))
-
-		backend := lb.serverPool.GetBackendByIndex(index)
-		if backend != nil && backend.Healthy {
-			return backend
-		}
-	}
-
-	// No healthy backends found
-	return nil
+	return lb.strategy.NextBackend(lb.serverPool)
 }
 
 // ServeHTTP implements the http.Handler interface
