@@ -10,6 +10,7 @@ import (
 
 	"go-balancer/internal/balancer"
 	"go-balancer/internal/config"
+	"go-balancer/internal/errors"
 )
 
 func main() {
@@ -42,13 +43,35 @@ func main() {
 
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
-		log.Fatalf("Configuration validation failed: %v", err)
+		// Handle structured validation errors
+		if validationErr, ok := err.(*config.ValidationError); ok {
+			log.Printf("Configuration validation failed with %d errors:", len(validationErr.Errors))
+			for i, vErr := range validationErr.Errors {
+				log.Printf("  %d. %v", i+1, vErr)
+			}
+		} else if lbErr, ok := err.(*errors.LoadBalancerError); ok {
+			log.Printf("Configuration validation failed: %v", lbErr)
+		} else {
+			log.Printf("Configuration validation failed: %v", err)
+		}
+		return
 	}
 
 	// Create load balancer
 	lb, err := balancer.NewLoadBalancer(cfg)
 	if err != nil {
-		log.Fatalf("Failed to create load balancer: %v", err)
+		// Handle structured load balancer creation errors
+		if lbErr, ok := err.(*errors.LoadBalancerError); ok {
+			log.Printf("Failed to create load balancer: %v", lbErr)
+			if errors.IsConfigurationError(lbErr) {
+				log.Printf("This is a configuration error. Please check your backend URLs and settings.")
+			} else if errors.IsBackendError(lbErr) {
+				log.Printf("This is a backend error. Please check that your backend servers are configured correctly.")
+			}
+		} else {
+			log.Printf("Failed to create load balancer: %v", err)
+		}
+		return
 	}
 
 	// Create HTTP server with both load balancer and metrics

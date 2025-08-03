@@ -23,7 +23,13 @@ func (rr *RoundRobinStrategy) NextBackend(serverPool *pool.ServerPool) *pool.Bac
 		return nil
 	}
 
+	healthyCount := serverPool.GetHealthyBackendCount()
+	if healthyCount == 0 {
+		return nil
+	}
+
 	// Try each backend in round-robin fashion
+	// We try up to backendCount times to find a healthy backend
 	for i := 0; i < backendCount; i++ {
 		next := atomic.AddInt64(&rr.counter, 1)
 		index := int((next - 1) % int64(backendCount))
@@ -34,6 +40,8 @@ func (rr *RoundRobinStrategy) NextBackend(serverPool *pool.ServerPool) *pool.Bac
 		}
 	}
 
+	// If we get here, no healthy backends were found despite healthyCount > 0
+	// This could happen due to race conditions between health checks and requests
 	return nil
 }
 

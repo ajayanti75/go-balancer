@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"strconv"
 	"sync"
+
+	"go-balancer/internal/errors"
 )
 
 // Backend represents a single backend server
@@ -35,7 +37,15 @@ func (sp *ServerPool) AddBackend(backendURL string) error {
 
 	parsedURL, err := url.Parse(backendURL)
 	if err != nil {
-		return fmt.Errorf("invalid backend URL %s: %w", backendURL, err)
+		return errors.NewInvalidBackendError(backendURL, err)
+	}
+
+	// Validate URL has required components
+	if parsedURL.Scheme == "" {
+		return errors.NewInvalidBackendError(backendURL, fmt.Errorf("missing URL scheme"))
+	}
+	if parsedURL.Host == "" {
+		return errors.NewInvalidBackendError(backendURL, fmt.Errorf("missing URL host"))
 	}
 
 	backend := &Backend{

@@ -3,73 +3,112 @@ package config
 import (
 	"fmt"
 	"net/url"
+
+	"go-balancer/internal/errors"
 )
+
+// ValidationError aggregates multiple validation errors
+type ValidationError struct {
+	Errors []*errors.LoadBalancerError
+}
+
+func (ve *ValidationError) Error() string {
+	if len(ve.Errors) == 0 {
+		return "no validation errors"
+	}
+
+	if len(ve.Errors) == 1 {
+		return fmt.Sprintf("validation failed: %s", ve.Errors[0].Error())
+	}
+
+	return fmt.Sprintf("validation failed with %d errors: %s (and %d more)",
+		len(ve.Errors), ve.Errors[0].Error(), len(ve.Errors)-1)
+}
+
+func (ve *ValidationError) Add(err *errors.LoadBalancerError) {
+	ve.Errors = append(ve.Errors, err)
+}
+
+func (ve *ValidationError) HasErrors() bool {
+	return len(ve.Errors) > 0
+}
 
 // ValidateConfig validates a configuration struct
 func ValidateConfig(c *Config) error {
-	var errors []string
+	validationErr := &ValidationError{}
 
 	// Validate port
 	if c.Port <= 0 || c.Port > 65535 {
-		errors = append(errors, fmt.Sprintf("port %d must be between 1 and 65535", c.Port))
+		validationErr.Add(errors.NewInvalidPortError(c.Port))
 	}
 
 	// Validate backends
 	if len(c.Backends) == 0 {
-		errors = append(errors, "at least one backend is required")
+		validationErr.Add(errors.NewInvalidConfigError("at least one backend is required", nil))
 	}
 
 	// Validate each backend URL
 	for i, backend := range c.Backends {
 		if backend == "" {
-			errors = append(errors, fmt.Sprintf("backend[%d] cannot be empty", i))
+			validationErr.Add(errors.NewInvalidBackendError(
+				fmt.Sprintf("backend[%d]", i),
+				fmt.Errorf("backend cannot be empty"),
+			).WithContext("index", i))
 			continue
 		}
 
 		parsedURL, err := url.Parse(backend)
 		if err != nil {
-			errors = append(errors, fmt.Sprintf("backend[%d] '%s' is not a valid URL: %v", i, backend, err))
+			validationErr.Add(errors.NewInvalidBackendError(backend, err).WithContext("index", i))
 			continue
 		}
 
 		if parsedURL.Scheme == "" {
-			errors = append(errors, fmt.Sprintf("backend[%d] '%s' must include a scheme (http:// or https://)", i, backend))
+			validationErr.Add(errors.NewInvalidBackendError(
+				backend,
+				fmt.Errorf("must include a scheme (http:// or https://)"),
+			).WithContext("index", i))
 		}
 
 		if parsedURL.Host == "" {
-			errors = append(errors, fmt.Sprintf("backend[%d] '%s' must include a host", i, backend))
+			validationErr.Add(errors.NewInvalidBackendError(
+				backend,
+				fmt.Errorf("must include a host"),
+			).WithContext("index", i))
 		}
 	}
 
 	// Validate health check path
 	if c.HealthCheckPath == "" {
-		errors = append(errors, "health check path cannot be empty")
+		validationErr.Add(errors.NewInvalidHealthCheckError("health check path cannot be empty"))
 	}
 
 	// Validate health check interval
 	if c.HealthCheckInterval <= 0 {
-		errors = append(errors, "health check interval must be positive")
+		validationErr.Add(errors.NewInvalidTimeoutError(c.HealthCheckInterval, "health check interval"))
 	}
 
 	// Validate health check timeout
 	if c.HealthCheckTimeout <= 0 {
-		errors = append(errors, "health check timeout must be positive")
+		validationErr.Add(errors.NewInvalidTimeoutError(c.HealthCheckTimeout, "health check timeout"))
 	}
 
 	// Validate timeout relationship
 	if c.HealthCheckTimeout >= c.HealthCheckInterval {
-		errors = append(errors, fmt.Sprintf("health check timeout (%s) must be less than interval (%s)",
-			c.HealthCheckTimeout, c.HealthCheckInterval))
+		validationErr.Add(errors.NewInvalidConfigError(
+			fmt.Sprintf("health check timeout (%s) must be less than interval (%s)",
+				c.HealthCheckTimeout, c.HealthCheckInterval),
+			nil,
+		).WithContext("timeout", c.HealthCheckTimeout).WithContext("interval", c.HealthCheckInterval))
 	}
 
 	// Validate backend timeout
 	if c.BackendTimeout <= 0 {
-		errors = append(errors, "backend timeout must be positive")
+		validationErr.Add(errors.NewInvalidTimeoutError(c.BackendTimeout, "backend timeout"))
 	}
 
-	if len(errors) > 0 {
-		return fmt.Errorf("configuration validation failed:\n  - %s",
-			fmt.Sprintf("%s", errors[0]))
+	if validationErr.HasErrors() {
+		return validationErr
 	}
 
 	return nil

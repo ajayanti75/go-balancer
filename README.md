@@ -10,7 +10,7 @@ A production-ready HTTP load balancer implementation in Go with health checking,
 - **Strategy pattern** for pluggable load balancing algorithms
 - **Configuration validation** with comprehensive error checking
 - **Context-aware timeouts** for backend requests and health checks
-- **Graceful error handling** with structured logging
+- **Graceful error handling** with structured error types and comprehensive context
 
 ## Quick Start
 
@@ -38,7 +38,8 @@ internal/
 ├── pool/         # Backend server pool with health tracking
 ├── healthcheck/  # Periodic health monitoring system
 ├── strategy/     # Load balancing algorithms (round-robin, etc.)
-└── metrics/      # Prometheus metrics collection
+├── metrics/      # Prometheus metrics collection
+└── errors/       # Structured error types with context and HTTP mapping
 ```
 
 ## Configuration
@@ -63,10 +64,38 @@ go_balancer_backend_requests_total{backend="backend-1"} 14
 go_balancer_backend_healthy{state="healthy"} 3
 ```
 
+## Error Handling
+
+The load balancer uses structured error types with specific error codes and HTTP status mapping:
+
+### Error Categories & Codes
+
+| Category | Code Range | Examples |
+|----------|------------|----------|
+| **Configuration** | 1000-1099 | Invalid port (1001), Invalid backend URL (1002), Invalid timeouts (1004) |
+| **Backend** | 1100-1199 | Backend unavailable (1100), Connection timeout (1101), No healthy backends (1104) |
+| **Load Balancer** | 1200-1299 | Strategy failure (1200), Empty pool (1201), Metrics failure (1202) |
+| **Health Check** | 1300-1399 | Health check failed (1313), Health check timeout (1314) |
+| **Request** | 1400-1499 | Request timeout (1400), Request failed (1401), Response copy error (1402) |
+
+### Error Context
+
+Each error includes contextual information for debugging:
+
+```go
+// Example: Backend connection error with context
+err := NewBackendConnectionError("backend-1", originalErr).
+    WithContext("port", 8080).
+    WithContext("attempt", 3)
+```
+
+All errors automatically map to appropriate HTTP status codes (400, 500, 502, 503, 504) for client responses.
+
 ## Key Design Patterns
 
 - **Strategy Pattern**: Pluggable load balancing algorithms
 - **Interface Segregation**: `LoadBalancingStrategy`, `MetricsProvider` interfaces
+- **Structured Error Handling**: Custom error types with context and HTTP status mapping
 - **Configuration Builder**: Validation with comprehensive error reporting
 - **Thread Safety**: `sync.RWMutex` for backend pool, atomic counters for round-robin
 - **Context Propagation**: Request timeouts and cancellation support
@@ -74,12 +103,14 @@ go_balancer_backend_healthy{state="healthy"} 3
 ## Available Commands
 
 ```bash
-make help           # Show all available commands
-make test           # Run automated test suite
-make run-backends   # Start test backend servers
-make run-lb         # Start load balancer
-make kill-processes # Clean up all running processes
-make check-ports    # Check port usage status
+make help            # Show all available commands
+make test            # Run complete test suite (unit + integration)
+make test-unit       # Run unit tests only  
+make test-integration # Run integration tests only
+make run-backends    # Start test backend servers
+make run-lb          # Start load balancer
+make kill-processes  # Clean up all running processes
+make check-ports     # Check port usage status
 ```
 
 ## Production Readiness
@@ -88,6 +119,7 @@ This implementation includes enterprise-grade features:
 
 - **Health checking** with configurable intervals and timeouts
 - **Metrics collection** ready for Prometheus scraping
+- **Structured error handling** with typed errors, context, and appropriate HTTP status codes
 - **Input validation** preventing invalid configurations
 - **Graceful degradation** when backends fail
 - **Comprehensive logging** for debugging and monitoring

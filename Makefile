@@ -1,18 +1,20 @@
 # Go Load Balancer Makefile
 
-.PHONY: help build run-backend run-lb test clean kill-processes check-ports
+.PHONY: help build run-backend run-lb test test-unit test-integration clean kill-processes check-ports
 
 # Default target
 help:
 	@echo "Go Load Balancer - Available commands:"
-	@echo "  build         - Build the load balancer binary"
-	@echo "  run-backend   - Run the test backend server on port 8080"
-	@echo "  run-lb        - Run the load balancer on port 8000"
-	@echo "  test          - Run test script (starts/stops processes automatically)"
-	@echo "  demo          - Run complete demo (automated test)"
-	@echo "  clean         - Clean build artifacts"
-	@echo "  kill-processes - Kill any running Go processes"
-	@echo "  check-ports   - Check what's running on our ports"
+	@echo "  build            - Build the load balancer binary"
+	@echo "  test             - Run complete test suite (unit + integration)"
+	@echo "  test-unit        - Run unit tests only"
+	@echo "  test-integration - Run integration tests only"
+	@echo "  run-backends     - Start test backend servers"
+	@echo "  run-lb           - Run the load balancer"
+	@echo "  demo             - Run complete demo (automated integration test)"
+	@echo "  clean            - Clean build artifacts"
+	@echo "  kill-processes   - Kill any running Go processes"
+	@echo "  check-ports      - Check what's running on our ports"
 
 # Build the load balancer
 build:
@@ -51,24 +53,45 @@ run-lb: kill-processes
 	@echo "Starting load balancer on port 8000 with multiple backends..."
 	go run main.go -port=8000 -backends="http://localhost:8080,http://localhost:8081,http://localhost:8082"
 
-# Run automated test
-test: kill-processes
-	@echo "Running automated test..."
+# Run complete test suite
+test: test-unit test-integration
+
+# Run unit tests
+test-unit:
+	@echo "Running unit tests..."
+	go test -v ./internal/...
+
+# Run integration tests
+test-integration: kill-processes
+	@echo "Running integration tests..."
 	@echo "Starting multiple test backend servers..."
 	@go run test/test_backend.go -num=3 -ports="8080,8081,8082" &
 	@sleep 3
 	@echo "Starting load balancer..."
 	@go run main.go -port=8000 -backends="http://localhost:8080,http://localhost:8081,http://localhost:8082" > /tmp/lb.log 2>&1 &
 	@sleep 5
-	@echo "Running tests..."
-	@./test.sh
+	@echo "Running integration test script..."
+	@echo "Testing Go Load Balancer - Round-Robin Distribution"
+	@echo "=================================================="
+	@echo "1. Testing round-robin distribution (6 requests)..."
+	@for i in 1 2 3 4 5 6; do \
+		response=$$(curl -s http://localhost:8000/); \
+		echo "Request $$i: $$response"; \
+	done
+	@echo "2. Testing with path /api/test..."
+	@response=$$(curl -s http://localhost:8000/api/test); echo "Response: $$response"
+	@echo "3. Testing with custom headers..."
+	@response=$$(curl -s -H "X-Test-Header: test-value" http://localhost:8000/); echo "Response: $$response"
+	@echo "4. Testing concurrent requests (should see different backends)..."
+	@for i in 1 2 3 4 5 6; do curl -s http://localhost:8000/ & done; wait
+	@echo "Concurrent test complete!"
 	@echo "Load balancer logs:"
 	@cat /tmp/lb.log
-	@echo "Test completed. Cleaning up..."
+	@echo "Integration test completed. Cleaning up..."
 	@$(MAKE) kill-processes
 
 # Run complete demo
-demo: test
+demo: test-integration
 
 # Clean build artifacts
 clean: kill-processes

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"go-balancer/internal/errors"
 	"go-balancer/internal/pool"
 )
 
@@ -89,7 +90,8 @@ func (hc *HealthChecker) checkBackend(backend *pool.Backend) {
 	// Create request with context
 	req, err := http.NewRequestWithContext(ctx, "GET", healthURL, nil)
 	if err != nil {
-		log.Printf("Error creating health check request for %s: %v", backend.ID, err)
+		healthErr := errors.NewHealthCheckFailedError(backend.ID, err)
+		log.Printf("Health check error: %v", healthErr)
 		hc.serverPool.SetBackendHealth(backend.ID, false)
 		return
 	}
@@ -100,8 +102,17 @@ func (hc *HealthChecker) checkBackend(backend *pool.Backend) {
 	// Perform the health check request
 	resp, err := hc.client.Do(req)
 	if err != nil {
+		var healthErr *errors.LoadBalancerError
+
+		// Check if it's a timeout error
+		if ctx.Err() == context.DeadlineExceeded {
+			healthErr = errors.NewHealthCheckTimeoutError(backend.ID)
+		} else {
+			healthErr = errors.NewHealthCheckFailedError(backend.ID, err)
+		}
+
 		log.Printf("Health check failed for backend %s (%s): %v",
-			backend.ID, healthURL, err)
+			backend.ID, healthURL, healthErr)
 		hc.serverPool.SetBackendHealth(backend.ID, false)
 		return
 	}
@@ -115,8 +126,10 @@ func (hc *HealthChecker) checkBackend(backend *pool.Backend) {
 		if healthy {
 			log.Printf("Backend %s is now healthy", backend.ID)
 		} else {
-			log.Printf("Backend %s is now unhealthy (status: %d)",
-				backend.ID, resp.StatusCode)
+			healthErr := errors.NewHealthCheckFailedError(backend.ID, nil).
+				WithContext("status_code", resp.StatusCode).
+				WithContext("url", healthURL)
+			log.Printf("Backend %s is now unhealthy: %v", backend.ID, healthErr)
 		}
 		hc.serverPool.SetBackendHealth(backend.ID, healthy)
 	}
